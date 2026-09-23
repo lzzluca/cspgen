@@ -1,0 +1,48 @@
+# yaml-language-server: $schema=../../csp.schema.json
+version: 1
+
+settings:
+  fail_on: none
+  report:
+    endpoint: https://o123.ingest.sentry.io/api/456/security/?sentry_key=abc
+
+variables:
+  API_HOST:
+    dev: localhost:4000
+    staging: api.staging.example.com
+    prod: api.example.com
+
+common:
+  default-src: [none]
+  object-src: [none]
+  base-uri: [none]
+  img-src: [self]
+  style-src: [self]
+  font-src: [self]
+
+documents:
+  learning:
+    routes: ["/", "/learning/*"]
+    mode: enforce
+    directives:
+      script-src:
+        - self
+        - value: unsafe-inline
+          status: accepted
+          reason: "userId inline nel layout, migrazione ai nonce in SEC-123"
+      connect-src:
+        - self
+        - "wss://${API_HOST}"
+        - value: "ws://localhost:4000"
+          dev_only: true
+          reason: "live reload di Phoenix"
+
+  admin:
+    routes: ["/admin/*"]
+    mode: report-only
+    directives:
+      script-src:
+        - self
+        - value: https://cdn.tiny.cloud
+          status: pending
+      connect-src: [self]

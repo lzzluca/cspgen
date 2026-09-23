@@ -1,0 +1,284 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "version": {
+      "type": "number",
+      "const": 1
+    },
+    "settings": {
+      "default": {},
+      "type": "object",
+      "properties": {
+        "fail_on": {
+          "default": "none",
+          "description": "`check` fails on unresolved warnings at or above this priority",
+          "type": "string",
+          "enum": [
+            "none",
+            "low",
+            "medium",
+            "high"
+          ]
+        },
+        "require_reason": {
+          "default": "medium",
+          "description": "Warnings at or above this priority need an accepted status with a reason",
+          "type": "string",
+          "enum": [
+            "low",
+            "medium",
+            "high"
+          ]
+        },
+        "dev_environments": {
+          "default": [
+            "dev"
+          ],
+          "description": "Environments where dev_only sources are included",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "report": {
+          "type": "object",
+          "properties": {
+            "endpoint": {
+              "type": "string",
+              "format": "uri",
+              "description": "Where browsers send violation reports"
+            },
+            "group": {
+              "default": "csp-endpoint",
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "endpoint"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "variables": {
+      "default": {},
+      "description": "Per-environment values, referenced as ${NAME}",
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[A-Z_][A-Z0-9_]*$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "propertyNames": {
+          "type": "string",
+          "minLength": 1
+        },
+        "additionalProperties": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "common": {
+      "description": "Directives added to every document",
+      "default": {},
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "enum": [
+          "default-src",
+          "script-src",
+          "script-src-elem",
+          "script-src-attr",
+          "style-src",
+          "style-src-elem",
+          "style-src-attr",
+          "img-src",
+          "font-src",
+          "connect-src",
+          "media-src",
+          "object-src",
+          "frame-src",
+          "child-src",
+          "worker-src",
+          "manifest-src",
+          "frame-ancestors",
+          "base-uri",
+          "form-action",
+          "upgrade-insecure-requests",
+          "sandbox",
+          "report-uri",
+          "report-to",
+          "trusted-types",
+          "require-trusted-types-for"
+        ]
+      },
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "object",
+              "properties": {
+                "value": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "CSP source, e.g. self, https://js.stripe.com, unsafe-inline"
+                },
+                "status": {
+                  "description": "pending: found but nobody decided yet. accepted: risk accepted, requires reason",
+                  "type": "string",
+                  "enum": [
+                    "pending",
+                    "accepted"
+                  ]
+                },
+                "reason": {
+                  "description": "Why this source is needed",
+                  "type": "string",
+                  "minLength": 1
+                },
+                "dev_only": {
+                  "description": "Only included in dev environments",
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "value"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        }
+      }
+    },
+    "documents": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[a-z0-9][a-z0-9_-]*$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "routes": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "Routes served by this document"
+          },
+          "mode": {
+            "default": "report-only",
+            "description": "report-only: Content-Security-Policy-Report-Only. enforce: Content-Security-Policy",
+            "type": "string",
+            "enum": [
+              "report-only",
+              "enforce"
+            ]
+          },
+          "directives": {
+            "default": {},
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "enum": [
+                "default-src",
+                "script-src",
+                "script-src-elem",
+                "script-src-attr",
+                "style-src",
+                "style-src-elem",
+                "style-src-attr",
+                "img-src",
+                "font-src",
+                "connect-src",
+                "media-src",
+                "object-src",
+                "frame-src",
+                "child-src",
+                "worker-src",
+                "manifest-src",
+                "frame-ancestors",
+                "base-uri",
+                "form-action",
+                "upgrade-insecure-requests",
+                "sandbox",
+                "report-uri",
+                "report-to",
+                "trusted-types",
+                "require-trusted-types-for"
+              ]
+            },
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "value": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "CSP source, e.g. self, https://js.stripe.com, unsafe-inline"
+                      },
+                      "status": {
+                        "description": "pending: found but nobody decided yet. accepted: risk accepted, requires reason",
+                        "type": "string",
+                        "enum": [
+                          "pending",
+                          "accepted"
+                        ]
+                      },
+                      "reason": {
+                        "description": "Why this source is needed",
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "dev_only": {
+                        "description": "Only included in dev environments",
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "value"
+                    ],
+                    "additionalProperties": false
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "required": [
+          "routes"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "version",
+    "documents"
+  ],
+  "additionalProperties": false,
+  "title": "cspgen configuration (csp.yml)"
+}
