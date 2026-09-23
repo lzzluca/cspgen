@@ -59,6 +59,12 @@ function effective(policy: Policy, directive: string) {
   return undefined;
 }
 
+/** A reason is a human decision: it accepts the source unless the tool marked it pending. */
+export function isAccepted(source: PolicySource | undefined): boolean {
+  if (!source) return false;
+  return source.status === 'accepted' || (source.reason !== undefined && source.status !== 'pending');
+}
+
 const hasKeyword = (sources: PolicySource[], keyword: string) =>
   sources.some((s) => s.value.kind === 'keyword' && s.value.keyword === keyword);
 const hasNonceOrHash = (sources: PolicySource[]) =>
@@ -76,7 +82,7 @@ export function evaluate(policy: Policy, options: EvaluateOptions): Warning[] {
       if (RANK[existing.priority] >= RANK[w.priority]) return;
       warnings.delete(k);
     }
-    const accepted = w.source?.status === 'accepted';
+    const accepted = isAccepted(w.source);
     warnings.set(key, { ...w, accepted, needsReason: !accepted && atLeast(w.priority, options.requireReason) });
   };
 

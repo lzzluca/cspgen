@@ -8,6 +8,10 @@ const yellow = paint(33);
 const cyan = paint(36);
 const dim = paint(2);
 const bold = paint(1);
+const green = paint(32);
+
+/** Low-priority warnings of the same kind beyond this count are collapsed into one line. */
+const GROUP_THRESHOLD = 3;
 
 const PRIORITY_LABEL: Record<Priority, string> = {
   high: red('HIGH  '),
@@ -15,7 +19,7 @@ const PRIORITY_LABEL: Record<Priority, string> = {
   low: cyan('LOW   '),
 };
 
-export function renderText(report: Report): string {
+export function renderText(report: Report, options: { verbose?: boolean } = {}): string {
   const out: string[] = [bold(`CSP review: ${report.target}`), ''];
 
   for (const doc of report.documents) {
@@ -32,7 +36,13 @@ export function renderText(report: Report): string {
       out.push('  No warnings.');
     } else {
       out.push('  Warnings:');
-      for (const w of doc.warnings) out.push(...renderWarning(w, doc.headers.length));
+      const { shown, groups } = options.verbose ? { shown: doc.warnings, groups: [] } : groupLow(doc.warnings);
+      for (const w of shown) out.push(...renderWarning(w, doc.headers.length));
+      for (const g of groups) {
+        const listed = g.values.slice(0, GROUP_THRESHOLD).join(', ');
+        const more = g.values.length > GROUP_THRESHOLD ? `, … (+${g.values.length - GROUP_THRESHOLD}, --verbose to list)` : '';
+        out.push(`    ${PRIORITY_LABEL.low} ${bold(g.directive)} ${g.values.length} × ${g.rule}`, `           ${dim(listed + more)}`);
+      }
     }
     out.push('');
   }
@@ -42,6 +52,46 @@ export function renderText(report: Report): string {
 
   out.push(renderSummary(report));
   return out.join('\n');
+}
+
+interface WarningGroup {
+  rule: string;
+  directive: string;
+  values: string[];
+}
+
+/** Collapses runs of low-priority warnings with the same rule and directive (e.g. 14 external hosts). */
+function groupLow(warnings: ReportWarning[]): { shown: ReportWarning[]; groups: WarningGroup[] } {
+  const buckets = new Map<string, ReportWarning[]>();
+  for (const w of warnings) {
+    if (w.priority !== 'low' || w.accepted || !w.value) continue;
+    const key = `${w.rule}|${w.directive}`;
+    buckets.set(key, [...(buckets.get(key) ?? []), w]);
+  }
+  const grouped = new Set<ReportWarning>();
+  const groups: WarningGroup[] = [];
+  for (const bucket of buckets.values()) {
+    if (bucket.length <= GROUP_THRESHOLD) continue;
+    bucket.forEach((w) => grouped.add(w));
+    groups.push({ rule: bucket[0]!.rule, directive: bucket[0]!.directive, values: bucket.map((w) => w.value!) });
+  }
+  return { shown: warnings.filter((w) => !grouped.has(w)), groups };
+}
+
+/** Colors a unified diff, dropping the `Index:`/`===` preamble. */
+export function renderDiff(patch: string): string {
+  return patch
+    .split('\n')
+    .filter((line) => !line.startsWith('Index:') && !line.startsWith('====='))
+    .map((line) => {
+      if (line.startsWith('+++') || line.startsWith('---')) return bold(line);
+      if (line.startsWith('+')) return green(line);
+      if (line.startsWith('-')) return red(line);
+      if (line.startsWith('@@')) return cyan(line);
+      return line;
+    })
+    .join('\n')
+    .trimEnd();
 }
 
 function renderWarning(w: ReportWarning, envCount: number): string[] {

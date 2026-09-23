@@ -33,7 +33,8 @@ Tre modalità, costruite sugli stessi componenti:
 - Warnings e priorità sono calcolati da **codice deterministico**, mai dall'LLM: stessa policy, stessi warnings.
 - **Motivazione obbligatoria** solo per le priorità **media e alta** (soglia configurabile). Quelle basse sono solo informative.
   *Perché:* se bisognasse motivare anche `self` o un'immagine da un CDN, i warnings diventerebbero rumore.
-- Un warning si **accetta con una motivazione** (`status: accepted` + `reason` nello YAML, oppure `cspgen accept ... --reason "..."`). La motivazione viene committata e rivista nella PR.
+- Un warning si **accetta con una motivazione**: basta scrivere `reason` sulla sorgente (a mano, oppure con `cspgen accept <valore> --reason "..."`). **Una motivazione equivale ad "accettato"**, a meno che la sorgente sia marcata `status: pending`; `status: accepted` esplicito resta valido. La motivazione viene committata e rivista nella PR.
+  *Perché:* meno campi da scrivere a mano; `pending` resta l'unico stato che il tool scrive.
 - **CI:** soglia configurabile da chi usa il tool (`fail_on`). **Default `fail_on: none`**: la CI non fallisce mai, ma il report mostra chiaramente i warnings ad alta priorità ancora aperti.
   *Perché:* il tool non deve bloccare deploy o PR senza una scelta esplicita del team.
 
@@ -210,6 +211,7 @@ documents:
 
   *Perché niente hash:* l'hash deve corrispondere byte per byte allo script *servito*, mentre il tool legge il *template*, e il motore di template può cambiare spazi e a capo. Un hash calcolato dal sorgente rischia di rompere l'app. Gli hash arriveranno con Playwright, quando il tool vedrà l'HTML reale.
 - Ogni direttiva ad alto rischio è **chiaramente evidenziata** nel report.
+- Nel report testuale i warnings **bassi** dello stesso tipo sulla stessa direttiva (per esempio 14 host esterni in `connect-src`) vengono **raggruppati** in una riga; `--verbose` li elenca tutti.
 - L'LLM propone, per lo stack rilevato, la **patch per usare i nonce** (+ `strict-dynamic`) come diff da rivedere. **Mai applicata in automatico.**
 - **Nonce:** nello YAML si scrive `nonce`. L'header generato contiene un segnaposto (`'nonce-{NONCE}'`), e lo snippet per lo stack spiega come riempirlo a ogni richiesta.
 
@@ -235,6 +237,10 @@ documents:
 | `cspgen promote` | Passa un documento da `report-only` a `enforce` |
 
 Nomi e opzioni precise da definire scrivendo il codice.
+
+**Modifiche a `csp.yml`:** i comandi che modificano il file mostrano sempre il diff. Quelli lanciati esplicitamente da una persona (`accept`, `add-source`, `promote`) lo applicano subito, con `--dry-run` per vederlo soltanto. Una modifica che renderebbe il file non valido viene rifiutata. Il tool scrive le parole chiave senza apici e conserva commenti, ordine e formattazione del resto del file.
+
+**Stato (settembre 2026):** fatti `review` (da `csp.yml`, `--url`, `--header`), `check`, `accept`, `add-source`, `promote`. Mancano `init`, `analyze`, `generate`, `import-reports`, il lock e il controllo di deriva.
 
 ## 10. Tecnologia
 

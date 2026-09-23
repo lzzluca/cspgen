@@ -109,6 +109,9 @@ function checkSemantics(config: Config): Omit<ConfigError, 'line'>[] {
 
   const routeOwner = new Map<string, string>();
   for (const [name, doc] of Object.entries(config.documents)) {
+    if (name === 'common') {
+      errors.push({ path: ['documents', name], message: '"common" is reserved for the shared block, rename this document' });
+    }
     checkDirectives(doc.directives, ['documents', name, 'directives']);
     doc.routes.forEach((route, i) => {
       const owner = routeOwner.get(route);

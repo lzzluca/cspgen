@@ -138,7 +138,7 @@
                   "description": "CSP source, e.g. self, https://js.stripe.com, unsafe-inline"
                 },
                 "status": {
-                  "description": "pending: found but nobody decided yet. accepted: risk accepted, requires reason",
+                  "description": "pending: found by the tool, nobody decided yet. accepted: risk accepted (requires reason)",
                   "type": "string",
                   "enum": [
                     "pending",
@@ -146,7 +146,7 @@
                   ]
                 },
                 "reason": {
-                  "description": "Why this source is needed",
+                  "description": "Why this source is needed. A reason accepts the source unless status is pending",
                   "type": "string",
                   "minLength": 1
                 },
@@ -241,7 +241,7 @@
                         "description": "CSP source, e.g. self, https://js.stripe.com, unsafe-inline"
                       },
                       "status": {
-                        "description": "pending: found but nobody decided yet. accepted: risk accepted, requires reason",
+                        "description": "pending: found by the tool, nobody decided yet. accepted: risk accepted (requires reason)",
                         "type": "string",
                         "enum": [
                           "pending",
@@ -249,7 +249,7 @@
                         ]
                       },
                       "reason": {
-                        "description": "Why this source is needed",
+                        "description": "Why this source is needed. A reason accepts the source unless status is pending",
                         "type": "string",
                         "minLength": 1
                       },

@@ -43,8 +43,12 @@ const SourceObject = z
     status: z
       .enum(['pending', 'accepted'])
       .optional()
-      .describe('pending: found but nobody decided yet. accepted: risk accepted, requires reason'),
-    reason: z.string().min(1).optional().describe('Why this source is needed'),
+      .describe('pending: found by the tool, nobody decided yet. accepted: risk accepted (requires reason)'),
+    reason: z
+      .string()
+      .min(1)
+      .optional()
+      .describe('Why this source is needed. A reason accepts the source unless status is pending'),
     dev_only: z.boolean().optional().describe('Only included in dev environments'),
   })
   .refine((s) => s.status !== 'accepted' || s.reason !== undefined, {

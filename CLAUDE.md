@@ -14,6 +14,7 @@ CLI in TypeScript che genera, revisiona e controlla la CSP di una webapp.
 ## Struttura
 
 - `src/config/`: schema zod di `csp.yml` (unica fonte, anche per il JSON Schema), parsing con numeri di riga, controlli semantici
+- `src/config/edit.ts`: modifiche a `csp.yml` che conservano commenti e formattazione; ogni comando che scrive nel file passa da qui
 - `src/policy/`: valori CSP (parole chiave con o senza apici), risoluzione di una policy per documento + ambiente, generazione e parsing degli header
 - `src/rules/evaluate.ts`: warnings e priorità. Solo codice deterministico, mai LLM.
 - `src/report/`: report (review per `csp.yml` o per una CSP live) e output testuale
