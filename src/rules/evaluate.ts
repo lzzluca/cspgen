@@ -51,7 +51,8 @@ const FALLBACKS: Record<string, string[]> = {
   'worker-src': ['worker-src', 'child-src', 'script-src', 'default-src'],
 };
 
-function effective(policy: Policy, directive: string) {
+/** The sources that actually govern a directive, following the fallback chain. */
+export function effective(policy: Policy, directive: string) {
   for (const candidate of FALLBACKS[directive] ?? [directive]) {
     const sources = policy.directives.get(candidate);
     if (sources) return { directive: candidate, sources };

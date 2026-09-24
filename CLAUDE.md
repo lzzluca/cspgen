@@ -18,7 +18,10 @@ CLI in TypeScript che genera, revisiona e controlla la CSP di una webapp.
 - `src/policy/`: valori CSP (parole chiave con o senza apici), risoluzione di una policy per documento + ambiente, generazione e parsing degli header
 - `src/rules/evaluate.ts`: warnings e priorità. Solo codice deterministico, mai LLM.
 - `src/report/`: report (review per `csp.yml` o per una CSP live) e output testuale
-- `examples/phoenix/csp.yml`: esempio di riferimento, usato anche dai test
+- `src/reports/`: import dei report di violazione dei browser (parsing dei formati, raggruppamento, filtro del rumore)
+- `src/observations.ts`: `csp.observations.yml`, scritto solo dal tool
+- `src/policy/routes.ts`: pattern delle route (`/`, `/products/:id`, `/admin/*`)
+- `examples/phoenix/`: `csp.yml` di riferimento (usato anche dai test) e `reports.ndjson`, report di esempio da provare con `import-reports`
 
 ## Convenzioni
 

@@ -193,12 +193,16 @@ documents:
 - Un'**osservazione** è un fatto visto nel browser: "sul documento X, la CSP avrebbe bloccato la risorsa Y". Prova che una sorgente serve davvero.
 - Le osservazioni stanno in **`csp.observations.yml`**, separato dal lock.
   *Perché:* il lock si ricostruisce dal codice, le osservazioni vengono dall'app in esecuzione e non sono ricostruibili.
-- Campi principali: documento, direttiva, risorsa bloccata, `source` (`production-report`, in futuro `playwright`), `env`, data, `count`.
-- **Nella prima versione le osservazioni arrivano da `cspgen import-reports <file.json>`**, un file esportato da Sentry o report-uri, o raccolto dal vostro endpoint. Il tool:
-  - raggruppa i duplicati (`count`)
-  - scarta il rumore noto (estensioni del browser, `about:`, script iniettati dal browser)
-  - propone una patch con le sorgenti nuove come `pending`, ordinate per frequenza
-  - segna come `vista a runtime` le sorgenti già presenti
+- Campi: `document`, `directive`, `source` (la sorgente CSP), `count`, `examples` (qualche URL bloccato), `from` (`production-report`, in futuro `playwright`), `env` (quando noto), `last_seen`. Il campo si chiama `from`, non `source`, per non confonderlo con la sorgente CSP.
+- **Nella prima versione le osservazioni arrivano da `cspgen import-reports <file...>`**. Formati supportati: `report-uri` (`{"csp-report": ...}`) e Reporting API (`report-to`), come singolo JSON, array o NDJSON (un report per riga). Gli export di Sentry arriveranno dopo. Il tool:
+  - raggruppa i duplicati per documento, direttiva e sorgente (`count`), riducendo gli URL a origine (`https://cdn.tiny.cloud/1/x.js` → `https://cdn.tiny.cloud`), gli URL della stessa origine a `self`, e `inline` / `eval` a `unsafe-inline` / `unsafe-eval`
+  - associa ogni report a un documento tramite le sue route (vince il pattern più specifico) e segnala i path che nessun documento copre
+  - scarta il rumore noto (estensioni del browser, `about:`)
+  - segnala le sorgenti già permesse (report da una policy precedente o da pagine in cache)
+  - propone una patch con le sorgenti nuove come `pending`, ordinate per frequenza; `--min-count` scarta quelle viste troppo poche volte
+  - se una direttiva nuova prima ricadeva su `default-src`, copia prima i valori di `default-src`, per non restringere senza volerlo
+- Essendo una proposta della macchina, **per default mostra solo la patch**: `--write` la applica e registra le osservazioni.
+- Limite noto: importare due volte lo stesso file somma di nuovo i conteggi.
 
   *Perché:* su un'app molto usata i report sono migliaia, e rivederli a mano uno per uno non è sostenibile. L'import chiude il ciclo del rollout: report-only, import, revisione, promote.
 - Per un singolo caso visto a mano in DevTools basta `cspgen add-source ... --reason "..."`.
@@ -238,9 +242,9 @@ documents:
 
 Nomi e opzioni precise da definire scrivendo il codice.
 
-**Modifiche a `csp.yml`:** i comandi che modificano il file mostrano sempre il diff. Quelli lanciati esplicitamente da una persona (`accept`, `add-source`, `promote`) lo applicano subito, con `--dry-run` per vederlo soltanto. Una modifica che renderebbe il file non valido viene rifiutata. Il tool scrive le parole chiave senza apici e conserva commenti, ordine e formattazione del resto del file.
+**Modifiche a `csp.yml`:** i comandi che modificano il file mostrano sempre il diff. Quelli lanciati esplicitamente da una persona (`accept`, `add-source`, `promote`) lo applicano subito, con `--dry-run` per vederlo soltanto. Quelli che propongono modifiche trovate dalla macchina (`import-reports`, in futuro `generate`) mostrano solo il diff, e lo applicano con `--write`. Prima di passare a enforce, `promote` elenca warnings senza motivazione e sorgenti `pending`. Una modifica che renderebbe il file non valido viene rifiutata. Il tool scrive le parole chiave senza apici e conserva commenti, ordine e formattazione del resto del file.
 
-**Stato (settembre 2026):** fatti `review` (da `csp.yml`, `--url`, `--header`), `check`, `accept`, `add-source`, `promote`. Mancano `init`, `analyze`, `generate`, `import-reports`, il lock e il controllo di deriva.
+**Stato (settembre 2026):** fatti `review` (da `csp.yml`, `--url`, `--header`), `check`, `accept`, `add-source`, `promote`, `import-reports`. Mancano `init`, `analyze`, `generate`, il lock e il controllo di deriva.
 
 ## 10. Tecnologia
 
@@ -258,7 +262,7 @@ Nomi e opzioni precise da definire scrivendo il codice.
    - **Hash per gli inline statici**, calcolati dall'HTML reale servito al browser.
    - "Vista a runtime" vale per *una sorgente*, mai per la policy intera: non vedere una violazione non prova che la policy sia completa.
    - Nella prima versione si testa a mano: il tool stampa l'header `Report-Only` e le istruzioni ("le violazioni compaiono nella console di DevTools").
-2. Integrazioni dirette con le API di Sentry e report-uri, per importare i report senza passare da un file.
+2. Import dagli export di Sentry, e integrazioni dirette con le API di Sentry e report-uri, per importare i report senza passare da un file.
 3. Report in Markdown per i commenti nelle PR, e in SARIF per le annotazioni di GitHub.
 4. Patch dello YAML consegnate come PR (history in git).
 
