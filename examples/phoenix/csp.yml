@@ -29,13 +29,13 @@ documents:
         - self
         - value: unsafe-inline
           status: accepted
-          reason: "userId inline nel layout, migrazione ai nonce in SEC-123"
+          reason: "inline userId in the layout, moving to nonces in SEC-123"
       connect-src:
         - self
         - "wss://${API_HOST}"
         - value: "ws://localhost:4000"
           dev_only: true
-          reason: "live reload di Phoenix"
+          reason: "Phoenix live reload"
 
   admin:
     routes: ["/admin/*"]

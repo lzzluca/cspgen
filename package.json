@@ -1,7 +1,7 @@
 {
   "name": "cspgen",
   "version": "0.1.0",
-  "description": "Genera, revisiona e controlla la Content Security Policy di una webapp",
+  "description": "Review, version and roll out the Content Security Policy of a web app",
   "type": "module",
   "bin": {
     "cspgen": "dist/cli.js"
@@ -18,7 +18,7 @@
     "schema": "tsx scripts/emit-schema.ts"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22.12"
   },
   "dependencies": {
     "commander": "^15.0.0",
@@ -31,5 +31,14 @@
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vitest": "^5.0.1"
-  }
+  },
+  "license": "MIT",
+  "author": "Luca Lazzarini",
+  "keywords": [
+    "csp",
+    "content-security-policy",
+    "security",
+    "xss",
+    "cli"
+  ]
 }

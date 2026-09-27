@@ -1,29 +1,29 @@
 # cspgen
 
-CLI in TypeScript che genera, revisiona e controlla la CSP di una webapp.
-**Prima di cambiare l'architettura o il formato dei file, leggi `DECISIONS.md`.**
+TypeScript CLI that generates, reviews and checks the CSP of a web app.
+**Read `DECISIONS.md` before changing the architecture or any file format.**
 
-## Comandi
+## Commands
 
-- `npm test`: test (vitest)
+- `npm test`: tests (vitest)
 - `npm run typecheck`
-- `npm run build`: compila in `dist/`
-- `npm run schema`: rigenera `csp.schema.json` da `src/config/schema.ts` (va fatto dopo ogni modifica allo schema)
-- `npm run dev -- review -c examples/phoenix/csp.yml`: esegue la CLI senza build
+- `npm run build`: compiles to `dist/`
+- `npm run schema`: regenerates `csp.schema.json` from `src/config/schema.ts` (run it after every schema change)
+- `npm run dev -- review -c examples/phoenix/csp.yml`: runs the CLI without building
 
-## Struttura
+## Layout
 
-- `src/config/`: schema zod di `csp.yml` (unica fonte, anche per il JSON Schema), parsing con numeri di riga, controlli semantici
-- `src/config/edit.ts`: modifiche a `csp.yml` che conservano commenti e formattazione; ogni comando che scrive nel file passa da qui
-- `src/policy/`: valori CSP (parole chiave con o senza apici), risoluzione di una policy per documento + ambiente, generazione e parsing degli header
-- `src/rules/evaluate.ts`: warnings e priorità. Solo codice deterministico, mai LLM.
-- `src/report/`: report (review per `csp.yml` o per una CSP live) e output testuale
-- `src/reports/`: import dei report di violazione dei browser (parsing dei formati, raggruppamento, filtro del rumore)
-- `src/observations.ts`: `csp.observations.yml`, scritto solo dal tool
-- `src/policy/routes.ts`: pattern delle route (`/`, `/products/:id`, `/admin/*`)
-- `examples/phoenix/`: `csp.yml` di riferimento (usato anche dai test) e `reports.ndjson`, report di esempio da provare con `import-reports`
+- `src/config/`: zod schema of `csp.yml` (single source, also for the JSON Schema), parsing with line numbers, semantic checks
+- `src/config/edit.ts`: edits to `csp.yml` that preserve comments and formatting; every command that writes the file goes through it
+- `src/policy/`: CSP values (keywords with or without quotes), resolving a policy per document + environment, generating and parsing headers
+- `src/policy/routes.ts`: route patterns (`/`, `/products/:id`, `/admin/*`)
+- `src/rules/evaluate.ts`: warnings and priorities. Deterministic code only, never an LLM.
+- `src/report/`: reports (review of `csp.yml` or of a live CSP) and text output
+- `src/reports/`: import of browser violation reports (format parsing, grouping, noise filtering)
+- `src/observations.ts`: `csp.observations.yml`, written only by the tool
+- `examples/phoenix/`: reference `csp.yml` (also used by tests) and `reports.ndjson`, sample reports for `import-reports`
 
-## Convenzioni
+## Conventions
 
-- ESM, import con estensione `.js`
-- Messaggi della CLI in inglese
+- ESM, imports with the `.js` extension
+- CLI messages in English

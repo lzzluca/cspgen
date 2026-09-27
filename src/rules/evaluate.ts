@@ -126,7 +126,8 @@ export function evaluate(policy: Policy, options: EvaluateOptions): Warning[] {
   if (!object) {
     warn({ rule: 'object-src-missing', priority: 'high', directive: 'object-src', message: "object-src is not set: plugins (<object>, <embed>) can load code; set object-src 'none'" });
   } else if (!(object.sources.length === 1 && hasKeyword(object.sources, 'none'))) {
-    warn({ rule: 'object-src-not-none', priority: 'high', directive: object.directive, message: "object-src should be 'none'" });
+    const via = object.directive === 'object-src' ? '' : ` (falls back to ${object.directive})`;
+    warn({ rule: 'object-src-not-none', priority: 'high', directive: 'object-src', message: `object-src${via} allows plugins (<object>, <embed>) that can run code; set object-src 'none'` });
   }
 
   if (!policy.directives.has('base-uri')) {
