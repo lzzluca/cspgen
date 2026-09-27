@@ -40,5 +40,10 @@
     "security",
     "xss",
     "cli"
-  ]
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lzzluca/cspgen.git"
+  },
+  "homepage": "https://github.com/lzzluca/cspgen#readme"
 }

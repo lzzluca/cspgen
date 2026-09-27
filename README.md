@@ -1,5 +1,7 @@
 # cspgen
 
+[![CI](https://github.com/lzzluca/cspgen/actions/workflows/ci.yml/badge.svg)](https://github.com/lzzluca/cspgen/actions/workflows/ci.yml)
+
 Review, version and roll out the **Content Security Policy** of a web app.
 
 A CSP is one of the strongest defenses against XSS, and one of the easiest to get wrong: it is either so permissive that it protects nothing (`'unsafe-inline'`, `https:`), or so strict that it breaks the app on the first deploy. `cspgen` treats the policy as code: a reviewed YAML file with one policy per document, a reason for every risky source, a CI gate, and a safe path from `report-only` to enforcement.
@@ -11,7 +13,7 @@ A CSP is one of the strongest defenses against XSS, and one of the easiest to ge
 Requires Node.js 22.12 or later. Not yet published to npm:
 
 ```sh
-git clone https://github.com/<you>/cspgen.git
+git clone https://github.com/lzzluca/cspgen.git
 cd cspgen
 npm ci && npm run build
 npm link        # makes `cspgen` available on your PATH
