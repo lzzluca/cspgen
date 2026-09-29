@@ -122,7 +122,7 @@ Each document has a mode, `report-only` or `enforce`. During the `report-only` p
   - SPA: many routes share one document, and therefore one policy.
   - SSR / MPA: one route is one document.
   - Phoenix LiveView: routes in the same `live_session` share the document. Moving to another `live_session`, or another pipeline, reloads the page and the CSP can change.
-- The tool works out which routes share a document.
+- The tool works out which routes share a document. *(Deferred: for now documents are written by hand, see §5 "What is analyzed".)*
 - The report explains that pages of the **same origin** are not isolated from each other: a per-document CSP reduces the attack surface, but does not isolate pages.
 
 ## 5. Analysis: LLM + deterministic code
@@ -145,15 +145,36 @@ Each document has a mode, `report-only` or `enforce`. During the `report-only` p
 - **Sources found only in the code**, never seen at runtime, **stay in the policy**, marked `static only`.
   *Why:* removing them would break exactly the pages no test visits.
 
+### What is analyzed
+- **File selection is deterministic.** Candidates are the files tracked by git (so `.env` and anything in `.gitignore` never leave the machine), minus dependency and build folders (`node_modules`, `deps`, `_build`, `dist`...) and `analysis.exclude`. Of these, the tool sends frontend and template files (`.html`, `.heex`, `.erb`, `.js`, `.ts`, `.jsx`, `.tsx`, `.vue`, `.svelte`, `.css`...) and any other file where a candidate pattern matches (see below).
+  *Known limit:* the selection will miss something. The `report-only` rollout and `import-reports` are the safety net.
+- **One question per file**: "find everything relevant to the CSP", with numbered lines. Long files are split into overlapping windows. It matches the lock, which is per file.
+- **Documents are not detected yet.** The documents are the ones written in `csp.yml`, and `generate` applies the findings to every document: in practice one policy for the whole app, which is exact for a SPA. Detecting document boundaries from the router (for example Phoenix `live_session`) is deferred.
+
+### Checking the LLM
+The LLM proposes, deterministic code checks, and what fails a check stays visible: it never disappears silently and it is never accepted automatically.
+- **Answers are validated** against a zod schema. An invalid answer is retried once with the validation error in the prompt; a second failure marks the file as `error` in the lock.
+- **Citations are checked with string comparisons**, no second LLM: each finding carries `line` and `text`. The finding is `verified` if `text` (whitespace-normalized) is on the cited line or near it (the line number is then corrected), and `text` contains the source. Otherwise it is `unverified`.
+  The check proves the thing **exists in the code**, not that it **matters for the CSP** (a URL called by the server, not by the browser, is in the code but not in the policy). Relevance stays a judgment of the LLM, visible in the lock diff and reviewed as a `pending` source.
+- **Cross-check with candidate patterns.** A few regexes (literal URLs, `<script`, `<link`, `<iframe`, `on...=` attributes, `eval(` / `new Function`) find the obvious candidates. For each one, the LLM must return a verdict: relevant (it becomes a finding) or not relevant, with a reason (an SVG namespace, a URL used server-side). A candidate the LLM ignores becomes a finding marked `missed_by_llm`. The regexes are not meant to be complete: finding what they cannot see (URLs built at runtime) is the LLM's job.
+- **`unverified` findings are not in the `generate` patch.** They are listed in the report, for the reader to look at.
+- **The LLM never writes a `reason`.** It only fills `provenance`, which is informational: a reason is a person's decision.
+- **The LLM never judges risk:** priorities come from the deterministic rules only.
+
 ### LLM provider and privacy
-- Bring your own API key. The provider is configurable: cloud, Bedrock or Vertex, local (Ollama...).
+- **One protocol: the OpenAI-compatible chat API**, with a small client built on `fetch` and no SDK. It covers local servers (Ollama, LM Studio, vLLM), OpenRouter (Claude, GPT, DeepSeek and others with one key) and OpenAI. Native Bedrock and Vertex are not supported (they are reachable through OpenRouter).
+- **Configuration in `csp.yml`**, the same for the whole team so that the lock does not change between developers: `analysis: { base_url, model, exclude }`. The API key comes only from an environment variable (`CSPGEN_API_KEY`). `--model` overrides locally, with a warning when it does not match the lock.
 - On startup, an **informational banner** says where the code goes. Local models are recommended, but the choice is the user's.
 - `--dry-run` shows exactly what would be sent to the LLM.
+
+### Testing
+- **The tool's code** (citation checks, cross-check, lock, cache invalidation) is tested with hand-written LLM answers, with no model. These tests run in CI.
+- **The quality of the analysis** is tried by hand on a real app: writing-app, the author's own project (not public), a Vite + React SPA with a Fastify API,, with a local model (`gemma4` on Ollama). Expected: `script-src 'self'`; `connect-src 'self'` (API calls go through the same-origin proxy); the Vite websocket and inline styles as `dev_only`; the LLM hosts called by the API (DeepSeek, Ollama) **not** in the policy.
 
 ### `csp.lock`
 - **YAML**, written only by the tool, with sorted keys (clean diffs), **committed**. It lives at the root, next to `csp.yml`.
 - It is a **cache of the code analysis**: it can be rebuilt entirely from the code.
-- **`files`:** for each file, the content hash and the findings. Each finding has a `kind` (`external-source`, `inline-script`, `inline-style`, `inline-handler`, `eval`), source, directive, evidence (line and text), provenance and `verified`.
+- **`files`:** for each file, the content hash and the findings. Each finding has a `kind` (`external-source`, `inline-script`, `inline-style`, `inline-handler`, `eval`), source, directive, evidence (line and text), provenance and `verified`. Findings for candidates the LLM ignored are marked `missed_by_llm`; candidates it judged not relevant are kept with its reason, so the lock diff shows them too.
 - **`documents`:** conclusions that depend on several files (routes, document boundaries). The key is the set of hashes listed in `depends_on`.
 - The model and prompt version are at the top of the file.
 - Locally, only changed files are analyzed again. CI runs the same command:
@@ -257,6 +278,7 @@ documents:
    - **Hashes for static inline scripts**, computed from the real HTML served to the browser.
    - "Seen at runtime" applies to *a source*, never to the whole policy: not seeing a violation does not prove the policy is complete.
    - Until then, testing is manual: the tool prints the `Report-Only` header and instructions ("violations show up in the DevTools console").
-2. Import from Sentry exports, and direct integrations with the Sentry and report-uri APIs.
-3. Markdown reports for PR comments, and SARIF for GitHub annotations.
-4. YAML patches delivered as PRs (history in git).
+2. **Automatic document detection** from the router and layouts (Phoenix `live_session` and pipelines, SSR routes), with document names proposed by the LLM.
+3. Import from Sentry exports, and direct integrations with the Sentry and report-uri APIs.
+4. Markdown reports for PR comments, and SARIF for GitHub annotations.
+5. YAML patches delivered as PRs (history in git).
