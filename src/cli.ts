@@ -1,7 +1,13 @@
 #!/usr/bin/env node
 import { readFile, writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { Command, Option } from 'commander';
+import { analyze, isReusable, type AnalyzeResult } from './analyze/analyze.js';
+import { findCandidates } from './analyze/candidates.js';
+import { selectFiles, type SelectedFile } from './analyze/files.js';
+import { isLocal, openAiCompatible } from './analyze/llm.js';
+import { hashContent, readLock, serializeLock, type Lock, type LockFile, type LockFinding } from './analyze/lock.js';
+import { buildMessages, windowsOf } from './analyze/prompt.js';
 import { ConfigEditor, EditError, scopeLabel, type Scope } from './config/edit.js';
 import { environmentsOf, loadConfigFile, parseConfig, type ConfigError } from './config/load.js';
 import { DIRECTIVES, PRIORITIES, type Directive, type Priority } from './config/schema.js';
@@ -200,6 +206,112 @@ program
       console.log(`Recorded ${analysis.proposals.length} observation(s) in ${path}.`);
     }
   });
+
+program
+  .command('analyze')
+  .description('Ask the LLM what the code loads, check every answer against the code, and update csp.lock')
+  .addOption(configOption())
+  .option('--root <dir>', 'repository to analyze (default: the folder of csp.yml)')
+  .option('-m, --model <name>', 'override analysis.model for this run')
+  .option('-n, --dry-run', 'print what would be sent to the LLM, without sending it or writing csp.lock')
+  .action(async (opts: { config: string; root?: string; model?: string; dryRun?: boolean }) => {
+    const config = await load(opts.config);
+    if (!config.analysis) {
+      fail(`${opts.config} has no analysis section; add one, e.g.\n\nanalysis:\n  base_url: http://localhost:11434/v1   # Ollama\n  model: gemma4:12b`);
+    }
+    const { base_url: baseUrl, exclude } = config.analysis;
+    const model = opts.model ?? config.analysis.model;
+    const root = resolve(opts.root ?? dirname(opts.config));
+    const lockPath = join(dirname(opts.config), 'csp.lock');
+
+    let files: SelectedFile[];
+    let previous: Lock | undefined;
+    try {
+      files = await selectFiles(root, exclude, (path) => readFile(join(root, path), 'utf8').catch(() => undefined));
+      previous = await readLock(lockPath);
+    } catch (e) {
+      fail((e as Error).message);
+    }
+    if (opts.model && opts.model !== config.analysis.model) {
+      console.warn(`warning: using ${opts.model} instead of ${config.analysis.model} (csp.yml); the lock will record ${opts.model}`);
+    }
+    const todo = files.filter((f) => !isReusable(previous, model, f.path, hashContent(f.content)));
+
+    if (opts.dryRun) {
+      console.log(`${files.length} file(s) selected in ${root}, ${todo.length} to send to ${baseUrl} (model ${model}):\n`);
+      for (const f of todo) {
+        const lines = f.content.split('\n');
+        for (const w of windowsOf(f.content, findCandidates(f.content))) {
+          for (const m of buildMessages(f.path, lines.length, w).filter((m) => m.role === 'user')) {
+            console.log(`${'='.repeat(78)}\n${m.content}\n`);
+          }
+        }
+      }
+      console.log(`(dry run: nothing sent, ${lockPath} not modified; the system prompt is the same for every file)`);
+      return;
+    }
+
+    const where = isLocal(baseUrl) ? 'on this machine' : 'to a remote service';
+    console.log(`Sending code ${where}: ${baseUrl}, model ${model}. Only files tracked by git are sent; see them with --dry-run.`);
+    const client = openAiCompatible({
+      baseUrl,
+      model,
+      apiKey: process.env.CSPGEN_API_KEY,
+      reasoningEffort: config.analysis.reasoning_effort,
+    });
+    const result = await analyze(files, client, previous, (p) => {
+      if (p.type === 'start') process.stdout.write(`  [${p.index}/${p.total}] ${p.path} … `);
+      else console.log(describeFile(p.file));
+    });
+    if (result.invalidated) console.log(`Analyzed every file again: ${result.invalidated}.`);
+
+    await writeFile(lockPath, serializeLock(result.lock));
+    printAnalyzeSummary(result, lockPath);
+  });
+
+function describeFile(f: LockFile): string {
+  if (f.status === 'error') return `error: ${f.error}`;
+  const unverified = f.findings.filter((x) => !x.verified).length;
+  const missed = f.findings.filter((x) => x.missed_by_llm).length;
+  const parts = [`${f.findings.length} finding(s)`];
+  if (unverified > 0) parts.push(`${unverified} unverified`);
+  if (missed > 0) parts.push(`${missed} missed by the LLM`);
+  if (f.dismissed.length > 0) parts.push(`${f.dismissed.length} dismissed`);
+  return parts.join(', ');
+}
+
+function printAnalyzeSummary(result: AnalyzeResult, lockPath: string) {
+  const entries = Object.entries(result.lock.files);
+  const all = entries.flatMap(([path, f]) => f.findings.map((finding) => ({ path, finding })));
+  const errors = entries.filter(([, f]) => f.status === 'error');
+  const line = (path: string, x: LockFinding) =>
+    `  ${path}:${x.evidence.line}  ${x.kind}${x.source ? ` ${x.source}` : ''}${x.directive ? ` (${x.directive})` : ''}`;
+
+  console.log(
+    `\n${result.analyzed.length} file(s) analyzed, ${result.reused.length} unchanged (answers reused). ` +
+      `${all.length} finding(s) in ${entries.length} file(s).`,
+  );
+  const verified = all.filter((x) => x.finding.verified && !x.finding.missed_by_llm);
+  if (verified.length > 0) {
+    console.log(`\nVerified (the cited code exists):`);
+    for (const { path, finding } of verified) console.log(`${line(path, finding)}${finding.dev_only ? '  dev only' : ''}`);
+  }
+  const missed = all.filter((x) => x.finding.missed_by_llm);
+  if (missed.length > 0) {
+    console.log(`\nMissed by the LLM (found by pattern matching, not reported or not judged):`);
+    for (const { path, finding } of missed) console.log(line(path, finding));
+  }
+  const unverified = all.filter((x) => !x.finding.verified);
+  if (unverified.length > 0) {
+    console.log(`\nUnverified, for you to look at (not proposed for the policy):`);
+    for (const { path, finding } of unverified) console.log(`${line(path, finding)}\n      ${finding.unverified_reason}`);
+  }
+  if (errors.length > 0) {
+    console.log(`\nNot analyzed (run again to retry):`);
+    for (const [path, f] of errors) console.log(`  ${path}: ${f.error}`);
+  }
+  console.log(`\nWrote ${lockPath}.`);
+}
 
 function printImportSummary(analysis: ImportAnalysis, skipped: number, minCount: number) {
   const n = (x: number) => x.toLocaleString('en-US');

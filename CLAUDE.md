@@ -20,6 +20,7 @@ TypeScript CLI that generates, reviews and checks the CSP of a web app.
 - `src/rules/evaluate.ts`: warnings and priorities. Deterministic code only, never an LLM.
 - `src/report/`: reports (review of `csp.yml` or of a live CSP) and text output
 - `src/reports/`: import of browser violation reports (format parsing, grouping, noise filtering)
+- `src/analyze/`: `cspgen analyze` and `csp.lock`: file selection (git-tracked only), candidate regexes, prompt and answer schema, OpenAI-compatible client, citation checks. The LLM only proposes; every answer is checked by code here
 - `src/observations.ts`: `csp.observations.yml`, written only by the tool
 - `examples/phoenix/`: reference `csp.yml` (also used by tests) and `reports.ndjson`, sample reports for `import-reports`
 

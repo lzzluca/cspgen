@@ -90,10 +90,27 @@ const SettingsSchema = z.strictObject({
     .optional(),
 });
 
+const AnalysisSchema = z.strictObject({
+  base_url: z
+    .url()
+    .default('http://localhost:11434/v1')
+    .describe('OpenAI-compatible API (Ollama, LM Studio, OpenRouter, OpenAI...). The key is read from CSPGEN_API_KEY'),
+  model: z.string().min(1).describe('Model name, the same for the whole team, e.g. gemma4:12b'),
+  reasoning_effort: z
+    .enum(['none', 'low', 'medium', 'high'])
+    .optional()
+    .describe('Sent to reasoning models when set; "none" turns thinking off on Ollama (much faster)'),
+  exclude: z
+    .array(z.string().min(1))
+    .default([])
+    .describe('Globs of files never sent to the LLM, relative to the repository root (e.g. "docs/**")'),
+});
+
 export const ConfigSchema = z.strictObject({
   $schema: z.string().optional(),
   version: z.literal(1),
   settings: SettingsSchema.prefault({}),
+  analysis: AnalysisSchema.optional().describe('LLM analysis of the code (`cspgen analyze`)'),
   variables: z
     .record(
       z.string().regex(/^[A-Z_][A-Z0-9_]*$/, 'variable names are UPPER_SNAKE_CASE'),
@@ -108,6 +125,7 @@ export const ConfigSchema = z.strictObject({
 });
 
 export type Config = z.output<typeof ConfigSchema>;
+export type AnalysisConfig = NonNullable<Config['analysis']>;
 export type DocumentConfig = Config['documents'][string];
 export type SourceEntry = z.output<typeof Source>;
 export type DirectivesConfig = z.output<typeof Directives>;

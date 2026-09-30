@@ -156,14 +156,14 @@ The LLM proposes, deterministic code checks, and what fails a check stays visibl
 - **Answers are validated** against a zod schema. An invalid answer is retried once with the validation error in the prompt; a second failure marks the file as `error` in the lock.
 - **Citations are checked with string comparisons**, no second LLM: each finding carries `line` and `text`. The finding is `verified` if `text` (whitespace-normalized) is on the cited line or near it (the line number is then corrected), and `text` contains the source. Otherwise it is `unverified`.
   The check proves the thing **exists in the code**, not that it **matters for the CSP** (a URL called by the server, not by the browser, is in the code but not in the policy). Relevance stays a judgment of the LLM, visible in the lock diff and reviewed as a `pending` source.
-- **Cross-check with candidate patterns.** A few regexes (literal URLs, `<script`, `<link`, `<iframe`, `on...=` attributes, `eval(` / `new Function`) find the obvious candidates. For each one, the LLM must return a verdict: relevant (it becomes a finding) or not relevant, with a reason (an SVG namespace, a URL used server-side). A candidate the LLM ignores becomes a finding marked `missed_by_llm`. The regexes are not meant to be complete: finding what they cannot see (URLs built at runtime) is the LLM's job.
+- **Cross-check with candidate patterns.** A few regexes (literal URLs, `<script`, `<link`, `<iframe`, `<style`, quoted `style=` and `on...=` attributes, `fetch(` / `new WebSocket(` / `new EventSource(` / `new Worker(`, `eval(` / `new Function`) find the obvious candidates. For each one, the LLM must return a verdict: relevant (it becomes a finding) or not relevant, with a reason (an SVG namespace, a URL used server-side). A candidate the LLM ignores becomes a finding marked `missed_by_llm`. The regexes are not meant to be complete: finding what they cannot see (URLs built at runtime) is the LLM's job.
 - **`unverified` findings are not in the `generate` patch.** They are listed in the report, for the reader to look at.
 - **The LLM never writes a `reason`.** It only fills `provenance`, which is informational: a reason is a person's decision.
 - **The LLM never judges risk:** priorities come from the deterministic rules only.
 
 ### LLM provider and privacy
 - **One protocol: the OpenAI-compatible chat API**, with a small client built on `fetch` and no SDK. It covers local servers (Ollama, LM Studio, vLLM), OpenRouter (Claude, GPT, DeepSeek and others with one key) and OpenAI. Native Bedrock and Vertex are not supported (they are reachable through OpenRouter).
-- **Configuration in `csp.yml`**, the same for the whole team so that the lock does not change between developers: `analysis: { base_url, model, exclude }`. The API key comes only from an environment variable (`CSPGEN_API_KEY`). `--model` overrides locally, with a warning when it does not match the lock.
+- **Configuration in `csp.yml`**, the same for the whole team so that the lock does not change between developers: `analysis: { base_url, model, reasoning_effort, exclude }`. `reasoning_effort` is sent only when set: `none` turns thinking off on Ollama, about 8 times faster with gemma4 (144 s → 17 s on a 15-line file). Answers are streamed, so that slow local models do not hit HTTP timeouts. The API key comes only from an environment variable (`CSPGEN_API_KEY`). `--model` overrides locally, with a warning when it does not match the lock.
 - On startup, an **informational banner** says where the code goes. Local models are recommended, but the choice is the user's.
 - `--dry-run` shows exactly what would be sent to the LLM.
 
@@ -260,7 +260,7 @@ documents:
 
 **Editing `csp.yml`:** commands that change the file always show the diff. Commands a person runs explicitly (`accept`, `add-source`, `promote`) apply it right away, with `--dry-run` to only show it. Commands that propose changes found by the machine (`import-reports`, later `generate`) only show the diff, and apply it with `--write`. An edit that would make the file invalid is refused. The tool writes keywords without quotes and preserves comments, order and formatting of the rest of the file.
 
-**Status (September 2026):** done: `review` (from `csp.yml`, `--url`, `--header`), `check`, `accept`, `add-source`, `promote`, `import-reports`. Missing: `init`, `analyze`, `generate`, the lock and the drift check.
+**Status (September 2026):** done: `review` (from `csp.yml`, `--url`, `--header`), `check`, `accept`, `add-source`, `promote`, `import-reports`, `analyze` and the lock (findings per file; documents not detected yet). Missing: `init`, `generate`, the stale-lock and drift checks in `check`.
 
 ## 10. Technology
 

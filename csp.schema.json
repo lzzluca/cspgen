@@ -67,6 +67,46 @@
       },
       "additionalProperties": false
     },
+    "analysis": {
+      "description": "LLM analysis of the code (`cspgen analyze`)",
+      "type": "object",
+      "properties": {
+        "base_url": {
+          "default": "http://localhost:11434/v1",
+          "description": "OpenAI-compatible API (Ollama, LM Studio, OpenRouter, OpenAI...). The key is read from CSPGEN_API_KEY",
+          "type": "string",
+          "format": "uri"
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Model name, the same for the whole team, e.g. gemma4:12b"
+        },
+        "reasoning_effort": {
+          "description": "Sent to reasoning models when set; \"none\" turns thinking off on Ollama (much faster)",
+          "type": "string",
+          "enum": [
+            "none",
+            "low",
+            "medium",
+            "high"
+          ]
+        },
+        "exclude": {
+          "default": [],
+          "description": "Globs of files never sent to the LLM, relative to the repository root (e.g. \"docs/**\")",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "required": [
+        "model"
+      ],
+      "additionalProperties": false
+    },
     "variables": {
       "default": {},
       "description": "Per-environment values, referenced as ${NAME}",
