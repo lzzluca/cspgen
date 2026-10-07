@@ -6,7 +6,7 @@ Review, version and roll out the **Content Security Policy** of a web app.
 
 A CSP is one of the strongest defenses against XSS, and one of the easiest to get wrong: it is either so permissive that it protects nothing (`'unsafe-inline'`, `https:`), or so strict that it breaks the app on the first deploy. `cspgen` treats the policy as code: a reviewed YAML file with one policy per document, a reason for every risky source, a CI gate, and a safe path from `report-only` to enforcement.
 
-> **Status: early, work in progress.** Reviewing policies, managing them as code and importing browser violation reports work today. Generating the policy from the application's source code (with an LLM, verified by deterministic checks) is the next milestone; see [Roadmap](#roadmap).
+> **Status: early, work in progress.** Reviewing policies, managing them as code and importing browser violation reports work today. `cspgen analyze` (experimental) asks an LLM what the code loads, checks every answer against the cited file and line, and records the result in `csp.lock`; turning that into a policy (`cspgen generate`) is the next milestone, see [Roadmap](#roadmap).
 
 ## Install
 
@@ -169,7 +169,7 @@ It reads both report formats browsers send (`report-uri` and the Reporting API's
 
 ## Roadmap
 
-- **Generate the policy from the source code.** An LLM maps routes, document boundaries and external sources in any stack; deterministic code checks every claim against a cited file and line, and caches results in a committed `csp.lock` so CI stays fast and reproducible. Local models are supported for teams that cannot send code to a cloud API.
+- **Generate the policy from the source code.** `cspgen analyze` already finds the sources in the code with an LLM (local models via Ollama, or any OpenAI-compatible API), checks every claim against a cited file and line, and caches the results in a committed `csp.lock`. Still to come: `cspgen generate` (the `csp.yml` patch), a stale-lock check in CI, and detecting routes and document boundaries.
 - **Nonce migration patches** for the detected stack, proposed as diffs, never applied automatically.
 - **Runtime verification with Playwright**, reusing the app's E2E suite to confirm sources and compute hashes from the real HTML.
 - Drift check between `csp.yml` and the headers actually served; Sentry import; SARIF output for GitHub code scanning.
