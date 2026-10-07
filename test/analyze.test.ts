@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parse } from 'yaml';
 import { describe, expect, it } from 'vitest';
-import { analyze, analyzeFile, checkAnswers } from '../src/analyze/analyze.js';
+import { analyze, analyzeFile, checkAnswers, isStale, staleness } from '../src/analyze/analyze.js';
 import { findCandidates } from '../src/analyze/candidates.js';
 import { globToRegExp, isExcludedPath, selectFiles, shouldAnalyze } from '../src/analyze/files.js';
 import type { ChatMessage, LlmClient } from '../src/analyze/llm.js';
@@ -284,6 +284,38 @@ describe('analyze and csp.lock', () => {
     const text = serializeLock(lock);
     expect(text.split('\n').slice(1, 4)).toEqual(['version: 1', 'model: fake-model', `prompt_version: ${PROMPT_VERSION}`]);
     expect(Object.keys((parse(text) as { files: object }).files)).toEqual(['a.js', 'b.js']);
+  });
+});
+
+describe('staleness (check in CI)', () => {
+  const a = { path: 'a.js', content: 'fetch("/api")' };
+  const b = { path: 'b.js', content: 'export const x = 1' };
+  const empty = { findings: [], candidates: [] };
+
+  it('is up to date right after an analysis', async () => {
+    const { lock } = await analyze([a, b], fakeClient(empty, empty), undefined);
+    expect(isStale(staleness([a, b], lock, 'fake-model'))).toBe(false);
+  });
+
+  it('lists changed, new, removed and failed files', async () => {
+    const { lock } = await analyze([a, b], fakeClient(empty, 'x', 'y'), undefined);
+    const c = { path: 'c.js', content: 'x' };
+    expect(staleness([{ ...a, content: 'fetch("/v2")' }, c], lock, 'fake-model')).toEqual({
+      reason: undefined,
+      changed: ['a.js'],
+      added: ['c.js'],
+      removed: ['b.js'],
+      errors: [],
+    });
+    expect(staleness([a, b], lock, 'fake-model').errors).toEqual(['b.js']);
+  });
+
+  it('is stale without a lock, or with another model', async () => {
+    expect(staleness([a], undefined, 'fake-model').reason).toBe('there is no csp.lock yet');
+    const { lock } = await analyze([a], fakeClient(empty), undefined);
+    const other = staleness([a], lock, 'other-model');
+    expect(other.reason).toBe('model changed from fake-model to other-model');
+    expect(isStale(other)).toBe(true);
   });
 });
 

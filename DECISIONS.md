@@ -260,7 +260,7 @@ documents:
 
 **Editing `csp.yml`:** commands that change the file always show the diff. Commands a person runs explicitly (`accept`, `add-source`, `promote`) apply it right away, with `--dry-run` to only show it. Commands that propose changes found by the machine (`import-reports`, later `generate`) only show the diff, and apply it with `--write`. An edit that would make the file invalid is refused. The tool writes keywords without quotes and preserves comments, order and formatting of the rest of the file.
 
-**Status (September 2026):** done: `review` (from `csp.yml`, `--url`, `--header`), `check`, `accept`, `add-source`, `promote`, `import-reports`, `analyze` and the lock (findings per file; documents not detected yet). Missing: `init`, `generate`, the stale-lock and drift checks in `check`.
+**Status (September 2026):** done: `review` (from `csp.yml`, `--url`, `--header`), `check`, `accept`, `add-source`, `promote`, `import-reports`, `analyze` and the lock (findings per file; documents not detected yet), the stale-lock warning in `check`. Missing: `init`, `generate`, the drift check.
 
 ## 10. Technology
 

@@ -2,15 +2,15 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { Command, Option } from 'commander';
-import { analyze, isReusable, type AnalyzeResult } from './analyze/analyze.js';
+import { analyze, isReusable, isStale, staleness, type AnalyzeResult, type Staleness } from './analyze/analyze.js';
 import { findCandidates } from './analyze/candidates.js';
-import { selectFiles, type SelectedFile } from './analyze/files.js';
+import { selectFiles } from './analyze/files.js';
 import { isLocal, openAiCompatible } from './analyze/llm.js';
-import { hashContent, readLock, serializeLock, type Lock, type LockFile, type LockFinding } from './analyze/lock.js';
+import { hashContent, readLock, serializeLock, type LockFile, type LockFinding } from './analyze/lock.js';
 import { buildMessages, windowsOf } from './analyze/prompt.js';
 import { ConfigEditor, EditError, scopeLabel, type Scope } from './config/edit.js';
 import { environmentsOf, loadConfigFile, parseConfig, type ConfigError } from './config/load.js';
-import { DIRECTIVES, PRIORITIES, type Directive, type Priority } from './config/schema.js';
+import { DIRECTIVES, PRIORITIES, type AnalysisConfig, type Directive, type Priority } from './config/schema.js';
 import { fetchLiveCsp } from './live.js';
 import { parseSourceValue } from './policy/values.js';
 import { mergeObservations, readObservations, serializeObservations } from './observations.js';
@@ -56,10 +56,19 @@ program
   .addOption(new Option('--fail-on <priority>', 'override settings.fail_on').choices(['none', ...PRIORITIES]))
   .option('--json', 'print the report as JSON')
   .option('-v, --verbose', 'list every low-priority warning instead of grouping them')
-  .action(async (opts: { config: string; env?: string; failOn?: 'none' | Priority; json?: boolean; verbose?: boolean }) => {
+  .option('--root <dir>', 'repository analyzed by `cspgen analyze` (default: the folder of csp.yml)')
+  .action(async (opts: { config: string; env?: string; failOn?: 'none' | Priority; json?: boolean; verbose?: boolean; root?: string }) => {
     const loaded = await load(opts.config, opts.env);
     const report = reviewConfig(loaded, opts.config, opts.env);
     print(report, opts);
+
+    // The lock only warns: it is a cache of the analysis, and CI never calls the LLM.
+    if (loaded.analysis) {
+      const { files, previous } = await filesToAnalyze(opts.config, loaded.analysis, opts.root);
+      const stale = staleness(files, previous, loaded.analysis.model);
+      if (isStale(stale)) console.warn(`
+${describeStaleness(stale)}`);
+    }
 
     const failOn = opts.failOn ?? loaded.settings.fail_on;
     if (failOn === 'none') return;
@@ -219,19 +228,9 @@ program
     if (!config.analysis) {
       fail(`${opts.config} has no analysis section; add one, e.g.\n\nanalysis:\n  base_url: http://localhost:11434/v1   # Ollama\n  model: gemma4:12b`);
     }
-    const { base_url: baseUrl, exclude } = config.analysis;
+    const { base_url: baseUrl } = config.analysis;
     const model = opts.model ?? config.analysis.model;
-    const root = resolve(opts.root ?? dirname(opts.config));
-    const lockPath = join(dirname(opts.config), 'csp.lock');
-
-    let files: SelectedFile[];
-    let previous: Lock | undefined;
-    try {
-      files = await selectFiles(root, exclude, (path) => readFile(join(root, path), 'utf8').catch(() => undefined));
-      previous = await readLock(lockPath);
-    } catch (e) {
-      fail((e as Error).message);
-    }
+    const { root, lockPath, files, previous } = await filesToAnalyze(opts.config, config.analysis, opts.root);
     if (opts.model && opts.model !== config.analysis.model) {
       console.warn(`warning: using ${opts.model} instead of ${config.analysis.model} (csp.yml); the lock will record ${opts.model}`);
     }
@@ -268,6 +267,30 @@ program
     await writeFile(lockPath, serializeLock(result.lock));
     printAnalyzeSummary(result, lockPath);
   });
+
+async function filesToAnalyze(configPath: string, analysis: AnalysisConfig, rootOption?: string) {
+  const root = resolve(rootOption ?? dirname(configPath));
+  const lockPath = join(dirname(configPath), 'csp.lock');
+  try {
+    const files = await selectFiles(root, analysis.exclude, (path) => readFile(join(root, path), 'utf8').catch(() => undefined));
+    return { root, lockPath, files, previous: await readLock(lockPath) };
+  } catch (e) {
+    fail((e as Error).message);
+  }
+}
+
+function describeStaleness(s: Staleness): string {
+  const list = (label: string, paths: string[]) =>
+    paths.length === 0 ? [] : [`  ${label}: ${paths.slice(0, 5).join(', ')}${paths.length > 5 ? `, … (${paths.length})` : ''}`];
+  const lines = [
+    `warning: csp.lock is out of date${s.reason ? `: ${s.reason}` : ''}. Run \`cspgen analyze\`.`,
+    ...list('changed since the last analysis', s.changed),
+    ...list('new', s.added),
+    ...list('no longer analyzed', s.removed),
+    ...list('analysis failed', s.errors),
+  ];
+  return lines.join('\n');
+}
 
 function describeFile(f: LockFile): string {
   if (f.status === 'error') return `error: ${f.error}`;

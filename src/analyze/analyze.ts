@@ -30,10 +30,45 @@ export interface AnalyzeResult {
 }
 
 export function isReusable(previous: Lock | undefined, model: string, path: string, hash: string): boolean {
-  if (!previous || previous.model !== model || previous.prompt_version !== PROMPT_VERSION) return false;
+  if (!previous || invalidation(previous, model)) return false;
   const f = previous.files[path];
   return f !== undefined && f.hash === hash && f.status === 'ok';
 }
+
+/** Why none of the cached answers can be reused. */
+export function invalidation(previous: Lock, model: string): string | undefined {
+  if (previous.model !== model) return `model changed from ${previous.model} to ${model}`;
+  if (previous.prompt_version !== PROMPT_VERSION) return `prompt version changed to ${PROMPT_VERSION}`;
+  return undefined;
+}
+
+export interface Staleness {
+  /** Set when the whole lock is out of date (no lock, other model or prompt). */
+  reason?: string;
+  changed: string[];
+  added: string[];
+  removed: string[];
+  errors: string[];
+}
+
+/** What `cspgen analyze` would do, without asking the LLM: used by `check` in CI. */
+export function staleness(files: SelectedFile[], lock: Lock | undefined, model: string): Staleness {
+  const result: Staleness = { changed: [], added: [], removed: [], errors: [] };
+  if (!lock) return { ...result, reason: 'there is no csp.lock yet' };
+  result.reason = invalidation(lock, model);
+  const current = new Set(files.map((f) => f.path));
+  for (const f of files) {
+    const cached = lock.files[f.path];
+    if (!cached) result.added.push(f.path);
+    else if (cached.hash !== hashContent(f.content)) result.changed.push(f.path);
+    else if (cached.status === 'error') result.errors.push(f.path);
+  }
+  result.removed = Object.keys(lock.files).filter((p) => !current.has(p));
+  return result;
+}
+
+export const isStale = (s: Staleness) =>
+  s.reason !== undefined || s.changed.length + s.added.length + s.removed.length + s.errors.length > 0;
 
 export async function analyze(
   files: SelectedFile[],
@@ -44,9 +79,7 @@ export async function analyze(
   const lock: Lock = { version: 1, model: client.model, prompt_version: PROMPT_VERSION, files: {} };
   const analyzed: string[] = [];
   const reused: string[] = [];
-  let invalidated: string | undefined;
-  if (previous && previous.model !== client.model) invalidated = `model changed from ${previous.model} to ${client.model}`;
-  else if (previous && previous.prompt_version !== PROMPT_VERSION) invalidated = `prompt version changed to ${PROMPT_VERSION}`;
+  const invalidated = previous ? invalidation(previous, client.model) : undefined;
 
   const todo = files.filter((f) => {
     const hash = hashContent(f.content);

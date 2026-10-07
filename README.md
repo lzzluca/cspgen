@@ -169,7 +169,7 @@ It reads both report formats browsers send (`report-uri` and the Reporting API's
 
 ## Roadmap
 
-- **Generate the policy from the source code.** `cspgen analyze` already finds the sources in the code with an LLM (local models via Ollama, or any OpenAI-compatible API), checks every claim against a cited file and line, and caches the results in a committed `csp.lock`. Still to come: `cspgen generate` (the `csp.yml` patch), a stale-lock check in CI, and detecting routes and document boundaries.
+- **Generate the policy from the source code.** `cspgen analyze` already finds the sources in the code with an LLM (local models via Ollama, or any OpenAI-compatible API), checks every claim against a cited file and line, and caches the results in a committed `csp.lock`. `cspgen check` warns when the lock is out of date. Still to come: `cspgen generate` (the `csp.yml` patch) and detecting routes and document boundaries.
 - **Nonce migration patches** for the detected stack, proposed as diffs, never applied automatically.
 - **Runtime verification with Playwright**, reusing the app's E2E suite to confirm sources and compute hashes from the real HTML.
 - Drift check between `csp.yml` and the headers actually served; Sentry import; SARIF output for GitHub code scanning.
